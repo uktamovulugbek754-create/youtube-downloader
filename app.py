@@ -1,5 +1,4 @@
 import os
-import re
 import threading
 import uuid
 import tempfile
@@ -13,45 +12,42 @@ IS_CLOUD = bool(os.environ.get("RENDER") or os.environ.get("RAILWAY_ENVIRONMENT"
 DOWNLOAD_DIR = Path(tempfile.gettempdir()) / "yt_downloads" if IS_CLOUD else Path("downloads")
 DOWNLOAD_DIR.mkdir(exist_ok=True)
 
-# ffmpeg bundled in bin/ during cloud build
 BIN_DIR = Path(__file__).parent / "bin"
 FFMPEG_LOCATION = str(BIN_DIR) if BIN_DIR.exists() and (BIN_DIR / "ffmpeg").exists() else None
 
 download_progress = {}
 
+LOCAL_BROWSERS = [] if IS_CLOUD else ["edge", "chrome", "firefox"]
 
-def sanitize(name):
-    return re.sub(r'[\\/*?:"<>|]', "_", name)
+# Try these configs in order to bypass YouTube bot detection
+YDL_CONFIGS = [
+    {"extractor_args": {"youtube": {"player_client": ["ios"]}}},
+    {"extractor_args": {"youtube": {"player_client": ["tv_simply"]}}},
+    {"extractor_args": {"youtube": {"player_client": ["mweb"]}}},
+    *[{"cookiesfrombrowser": (b, None, None, None)} for b in LOCAL_BROWSERS],
+    {},
+]
+
+Q_MAP = {
+    "2160": "bestvideo[height<=2160][ext=mp4]+bestaudio[ext=m4a]/best[height<=2160]",
+    "1080": "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080]",
+    "720":  "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720]",
+    "480":  "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480]",
+    "360":  "bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360]",
+    "240":  "bestvideo[height<=240][ext=mp4]+bestaudio[ext=m4a]/best[height<=240]",
+}
 
 
-def ydl_opts(quality, fmt, out_dir, hook):
-    base = {
-        "outtmpl": str(out_dir / "%(id)s_%(title).60s.%(ext)s"),
-        "progress_hooks": [hook],
-        "quiet": True,
-        "no_warnings": True,
-    }
-    if FFMPEG_LOCATION:
-        base["ffmpeg_location"] = FFMPEG_LOCATION
-
-    if fmt == "mp3":
-        return {**base,
-            "format": "bestaudio/best",
-            "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "192"}],
-        }
-
-    q_map = {
-        "2160": "bestvideo[height<=2160][ext=mp4]+bestaudio[ext=m4a]/best[height<=2160]",
-        "1080": "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080]",
-        "720":  "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720]",
-        "480":  "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480]",
-        "360":  "bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360]",
-        "240":  "bestvideo[height<=240][ext=mp4]+bestaudio[ext=m4a]/best[height<=240]",
-    }
-    return {**base,
-        "format": q_map.get(quality, "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best"),
-        "merge_output_format": "mp4",
-    }
+def run_ydl(url, extra_opts, download=False):
+    last_err = None
+    for cfg in YDL_CONFIGS:
+        opts = {"quiet": True, "no_warnings": True, **cfg, **extra_opts}
+        try:
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                return ydl.extract_info(url, download=download)
+        except Exception as e:
+            last_err = e
+    raise last_err or Exception("Yuklab bo'lmadi")
 
 
 @app.route("/")
@@ -65,8 +61,7 @@ def get_info():
     if not url:
         return jsonify({"error": "URL kiritilmadi"}), 400
     try:
-        with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True}) as ydl:
-            info = ydl.extract_info(url, download=False)
+        info = run_ydl(url, {})
         heights = {f.get("height") for f in info.get("formats", [])
                    if f.get("height") and f.get("vcodec") != "none"}
         available = sorted([h for h in [2160, 1080, 720, 480, 360, 240] if h in heights], reverse=True)
@@ -104,20 +99,33 @@ def start_download():
 
     def run():
         try:
-            opts = ydl_opts(quality, fmt, DOWNLOAD_DIR, hook)
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                info = ydl.extract_info(url, download=True)
-                # find the output file
-                ext = "mp3" if fmt == "mp3" else "mp4"
-                vid_id = info.get("id", "")
-                matches = list(DOWNLOAD_DIR.glob(f"{vid_id}_*{ext}"))
-                if not matches:
-                    matches = sorted(DOWNLOAD_DIR.glob(f"*.{ext}"), key=lambda p: p.stat().st_mtime, reverse=True)
-                if matches:
-                    download_progress[did].update(status="done", percent=100, filepath=str(matches[0]),
-                                                   filename=matches[0].name)
-                else:
-                    download_progress[did].update(status="error", error="Fayl topilmadi")
+            if fmt == "mp3":
+                dl_opts = {
+                    "format": "bestaudio/best",
+                    "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "192"}],
+                }
+            else:
+                dl_opts = {
+                    "format": Q_MAP.get(quality, "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best"),
+                    "merge_output_format": "mp4",
+                }
+            dl_opts["outtmpl"] = str(DOWNLOAD_DIR / "%(id)s_%(title).60s.%(ext)s")
+            dl_opts["progress_hooks"] = [hook]
+            if FFMPEG_LOCATION:
+                dl_opts["ffmpeg_location"] = FFMPEG_LOCATION
+
+            info = run_ydl(url, dl_opts, download=True)
+
+            ext = "mp3" if fmt == "mp3" else "mp4"
+            vid_id = info.get("id", "")
+            matches = list(DOWNLOAD_DIR.glob(f"{vid_id}_*.{ext}"))
+            if not matches:
+                matches = sorted(DOWNLOAD_DIR.glob(f"*.{ext}"), key=lambda p: p.stat().st_mtime, reverse=True)
+            if matches:
+                download_progress[did].update(status="done", percent=100,
+                                               filepath=str(matches[0]), filename=matches[0].name)
+            else:
+                download_progress[did].update(status="error", error="Fayl topilmadi")
         except Exception as e:
             download_progress[did].update(status="error", error=str(e))
 
