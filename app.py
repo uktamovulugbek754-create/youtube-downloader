@@ -61,7 +61,7 @@ def index():
 
 @app.route("/api/info", methods=["POST"])
 def get_info():
-    url = (request.get_json() or {}).get("url", "").strip()
+    url = (request.get_json(force=True, silent=True) or {}).get("url", "").strip()
     if not url:
         return jsonify({"error": "URL kiritilmadi"}), 400
     try:
@@ -84,7 +84,7 @@ def get_info():
 
 @app.route("/api/download", methods=["POST"])
 def start_download():
-    data = request.get_json() or {}
+    data = request.get_json(force=True, silent=True) or {}
     url = data.get("url", "").strip()
     quality = str(data.get("quality", "best"))
     fmt = data.get("format", "mp4")
