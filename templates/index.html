@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>YouTube Video Yuklovchi</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(135deg, #0f0f0f 0%, #1a1a2e 50%, #16213e 100%);
+      min-height: 100vh;
+      color: #e2e8f0;
+    }
+
+    header {
+      text-align: center;
+      padding: 3rem 1rem 2rem;
+    }
+
+    header h1 {
+      font-size: clamp(1.8rem, 5vw, 3rem);
+      font-weight: 800;
+      background: linear-gradient(135deg, #ff0000, #ff6b6b, #ffd93d);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 0.5rem;
+    }
+
+    header p {
+      color: #94a3b8;
+      font-size: 1rem;
+    }
+
+    .container {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 0 1rem 4rem;
+    }
+
+    .search-box {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 2rem;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 16px;
+      padding: 0.5rem;
+      backdrop-filter: blur(10px);
+    }
+
+    .search-box input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: #e2e8f0;
+      font-size: 1rem;
+      padding: 0.7rem 1rem;
+    }
+
+    .search-box input::placeholder { color: #64748b; }
+
+    .search-box button {
+      background: linear-gradient(135deg, #ff0000, #cc0000);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      padding: 0.7rem 1.5rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+      white-space: nowrap;
+    }
+
+    .search-box button:hover { opacity: 0.9; transform: scale(1.02); }
+    .search-box button:active { transform: scale(0.98); }
+
+    .card {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 20px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+      backdrop-filter: blur(10px);
+    }
+
+    .video-info {
+      display: flex;
+      gap: 1.2rem;
+      align-items: flex-start;
+    }
+
+    .video-info img {
+      width: 160px;
+      min-width: 160px;
+      height: 90px;
+      object-fit: cover;
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .video-meta h2 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: #f1f5f9;
+      margin-bottom: 0.4rem;
+      line-height: 1.4;
+    }
+
+    .video-meta .sub {
+      font-size: 0.82rem;
+      color: #64748b;
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .section-title {
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #64748b;
+      margin-bottom: 0.75rem;
+    }
+
+    /* Format tabs */
+    .format-tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .format-tab {
+      flex: 1;
+      padding: 0.7rem;
+      border-radius: 12px;
+      border: 2px solid rgba(255,255,255,0.1);
+      background: transparent;
+      color: #94a3b8;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+    }
+
+    .format-tab:hover { border-color: rgba(255,255,255,0.25); color: #e2e8f0; }
+
+    .format-tab.active-video {
+      border-color: #3b82f6;
+      background: rgba(59,130,246,0.15);
+      color: #60a5fa;
+    }
+
+    .format-tab.active-mp3 {
+      border-color: #22c55e;
+      background: rgba(34,197,94,0.15);
+      color: #4ade80;
+    }
+
+    /* Quality grid */
+    .quality-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+      gap: 0.6rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .quality-btn {
+      padding: 0.7rem 0.5rem;
+      border-radius: 12px;
+      border: 2px solid rgba(255,255,255,0.1);
+      background: transparent;
+      color: #94a3b8;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+      position: relative;
+    }
+
+    .quality-btn:hover { border-color: rgba(255,255,255,0.3); color: #e2e8f0; }
+
+    .quality-btn.selected {
+      border-color: #f59e0b;
+      background: rgba(245,158,11,0.15);
+      color: #fbbf24;
+    }
+
+    .quality-btn .badge {
+      display: block;
+      font-size: 0.65rem;
+      color: #64748b;
+      font-weight: 400;
+      margin-top: 0.1rem;
+    }
+
+    .quality-btn.selected .badge { color: #d97706; }
+
+    /* MP3 section */
+    .mp3-section {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 1rem 1.2rem;
+      border-radius: 14px;
+      background: rgba(34,197,94,0.08);
+      border: 1px solid rgba(34,197,94,0.2);
+    }
+
+    .mp3-icon {
+      font-size: 2rem;
+      line-height: 1;
+    }
+
+    .mp3-info h3 { font-size: 1rem; font-weight: 700; color: #4ade80; }
+    .mp3-info p { font-size: 0.8rem; color: #64748b; margin-top: 0.2rem; }
+
+    /* Download button */
+    .download-btn {
+      width: 100%;
+      padding: 1rem;
+      border-radius: 14px;
+      border: none;
+      font-size: 1.05rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-top: 0.5rem;
+    }
+
+    .download-btn.video-btn {
+      background: linear-gradient(135deg, #3b82f6, #2563eb);
+      color: white;
+    }
+
+    .download-btn.mp3-btn {
+      background: linear-gradient(135deg, #22c55e, #16a34a);
+      color: white;
+    }
+
+    .download-btn:hover { opacity: 0.9; transform: translateY(-1px); }
+    .download-btn:active { transform: translateY(0); }
+    .download-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+    /* Progress */
+    .progress-wrap {
+      margin-top: 1rem;
+    }
+
+    .progress-bar-bg {
+      height: 8px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 99px;
+      overflow: hidden;
+      margin-bottom: 0.6rem;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      border-radius: 99px;
+      transition: width 0.4s ease;
+      background: linear-gradient(90deg, #3b82f6, #60a5fa);
+      width: 0%;
+    }
+
+    .progress-bar-fill.mp3-fill {
+      background: linear-gradient(90deg, #22c55e, #4ade80);
+    }
+
+    .progress-text {
+      font-size: 0.85rem;
+      color: #94a3b8;
+      text-align: center;
+    }
+
+    .success-msg {
+      text-align: center;
+      padding: 1rem;
+      border-radius: 12px;
+      background: rgba(34,197,94,0.1);
+      border: 1px solid rgba(34,197,94,0.25);
+      color: #4ade80;
+      font-weight: 600;
+      margin-top: 0.75rem;
+    }
+
+    .success-msg a {
+      color: #86efac;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
+    .error-msg {
+      text-align: center;
+      padding: 0.8rem;
+      border-radius: 12px;
+      background: rgba(239,68,68,0.1);
+      border: 1px solid rgba(239,68,68,0.25);
+      color: #f87171;
+      font-size: 0.9rem;
+      margin-top: 0.75rem;
+    }
+
+    .loading-spin {
+      display: inline-block;
+      width: 18px; height: 18px;
+      border: 3px solid rgba(255,255,255,0.2);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 0.4rem;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .hidden { display: none !important; }
+
+    @media (max-width: 500px) {
+      .video-info { flex-direction: column; }
+      .video-info img { width: 100%; height: auto; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>&#9654; YouTube Yuklovchi</h1>
+  <p>Video yoki MP3 formatida yuklab oling — bepul va tez</p>
+</header>
+
+<div class="container">
+
+  <!-- URL input -->
+  <div class="search-box">
+    <input type="text" id="urlInput" placeholder="YouTube havolasini joylashtiring..." />
+    <button id="fetchBtn" onclick="fetchInfo()">Tekshirish</button>
+  </div>
+
+  <!-- Video info card -->
+  <div id="infoCard" class="card hidden">
+    <div class="video-info">
+      <img id="thumbnail" src="" alt="thumbnail" />
+      <div class="video-meta">
+        <h2 id="videoTitle"></h2>
+        <div class="sub">
+          <span id="videoUploader"></span>
+          <span id="videoDuration"></span>
+          <span id="videoViews"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Download options card -->
+  <div id="optionsCard" class="card hidden">
+
+    <!-- Format tabs -->
+    <div class="section-title">Format tanlang</div>
+    <div class="format-tabs">
+      <button class="format-tab active-video" id="tabVideo" onclick="setMode('video')">&#127916; Video (MP4)</button>
+      <button class="format-tab" id="tabMp3" onclick="setMode('mp3')">&#127925; Audio (MP3)</button>
+    </div>
+
+    <!-- Video quality section -->
+    <div id="videoSection">
+      <div class="section-title">Sifat tanlang</div>
+      <div class="quality-grid" id="qualityGrid"></div>
+      <button class="download-btn video-btn" id="dlVideoBtn" onclick="startDownload()">
+        &#8659; Video Yuklab Olish
+      </button>
+    </div>
+
+    <!-- MP3 section -->
+    <div id="mp3Section" class="hidden">
+      <div class="mp3-section">
+        <div class="mp3-icon">&#127925;</div>
+        <div class="mp3-info">
+          <h3>MP3 Audio</h3>
+          <p>192 kbps sifatda, yuqori ovoz sifati</p>
+        </div>
+      </div>
+      <button class="download-btn mp3-btn" id="dlMp3Btn" onclick="startDownload()" style="margin-top:1rem;">
+        &#8659; MP3 Yuklab Olish
+      </button>
+    </div>
+
+    <!-- Progress -->
+    <div id="progressWrap" class="progress-wrap hidden">
+      <div class="progress-bar-bg">
+        <div class="progress-bar-fill" id="progressFill"></div>
+      </div>
+      <div class="progress-text" id="progressText">Tayyorlanmoqda...</div>
+    </div>
+
+    <div id="successMsg" class="success-msg hidden"></div>
+    <div id="errorMsg" class="error-msg hidden"></div>
+  </div>
+
+</div>
+
+<script>
+  let currentMode = 'video';
+  let selectedQuality = 'best';
+  let currentDownloadId = null;
+  let pollInterval = null;
+  let currentUrl = '';
+  let availableQualities = [];
+
+  const qualityLabels = {
+    2160: { label: '4K', sub: '2160p' },
+    1080: { label: '1080p', sub: 'Full HD' },
+    720:  { label: '720p',  sub: 'HD' },
+    480:  { label: '480p',  sub: 'SD' },
+    360:  { label: '360p',  sub: 'Low' },
+    240:  { label: '240p',  sub: 'Very Low' },
+  };
+
+  function formatDuration(sec) {
+    if (!sec) return '';
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = sec % 60;
+    if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    return `${m}:${String(s).padStart(2,'0')}`;
+  }
+
+  function formatViews(n) {
+    if (!n) return '';
+    if (n >= 1e9) return (n/1e9).toFixed(1) + 'B ko\'rish';
+    if (n >= 1e6) return (n/1e6).toFixed(1) + 'M ko\'rish';
+    if (n >= 1e3) return (n/1e3).toFixed(0) + 'K ko\'rish';
+    return n + ' ko\'rish';
+  }
+
+  async function fetchInfo() {
+    const url = document.getElementById('urlInput').value.trim();
+    if (!url) { alert("Iltimos, YouTube havolasini kiriting!"); return; }
+    currentUrl = url;
+
+    const btn = document.getElementById('fetchBtn');
+    btn.innerHTML = '<span class="loading-spin"></span>Yuklanmoqda...';
+    btn.disabled = true;
+
+    resetState();
+
+    try {
+      const res = await fetch('/api/info', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url })
+      });
+      const data = await res.json();
+
+      if (data.error) throw new Error(data.error);
+
+      document.getElementById('thumbnail').src = data.thumbnail;
+      document.getElementById('videoTitle').textContent = data.title;
+      document.getElementById('videoUploader').textContent = data.uploader || '';
+      document.getElementById('videoDuration').textContent = formatDuration(data.duration);
+      document.getElementById('videoViews').textContent = formatViews(data.view_count);
+
+      availableQualities = data.available_qualities || [];
+      buildQualityGrid(availableQualities);
+
+      document.getElementById('infoCard').classList.remove('hidden');
+      document.getElementById('optionsCard').classList.remove('hidden');
+    } catch (e) {
+      showError('Xato: ' + e.message);
+    } finally {
+      btn.innerHTML = 'Tekshirish';
+      btn.disabled = false;
+    }
+  }
+
+  function buildQualityGrid(qualities) {
+    const grid = document.getElementById('qualityGrid');
+    grid.innerHTML = '';
+
+    // Best quality button always
+    const bestBtn = makeQualityBtn('best', 'Eng Yaxshi', 'Auto sifat');
+    grid.appendChild(bestBtn);
+
+    qualities.forEach(q => {
+      const info = qualityLabels[q] || { label: q + 'p', sub: '' };
+      grid.appendChild(makeQualityBtn(String(q), info.label, info.sub));
+    });
+
+    // Auto-select best
+    selectQuality('best');
+  }
+
+  function makeQualityBtn(value, label, sub) {
+    const btn = document.createElement('button');
+    btn.className = 'quality-btn';
+    btn.dataset.quality = value;
+    btn.innerHTML = `${label}<span class="badge">${sub}</span>`;
+    btn.onclick = () => selectQuality(value);
+    return btn;
+  }
+
+  function selectQuality(value) {
+    selectedQuality = value;
+    document.querySelectorAll('.quality-btn').forEach(b => {
+      b.classList.toggle('selected', b.dataset.quality === value);
+    });
+  }
+
+  function setMode(mode) {
+    currentMode = mode;
+    document.getElementById('tabVideo').className = 'format-tab' + (mode === 'video' ? ' active-video' : '');
+    document.getElementById('tabMp3').className = 'format-tab' + (mode === 'mp3' ? ' active-mp3' : '');
+    document.getElementById('videoSection').classList.toggle('hidden', mode !== 'video');
+    document.getElementById('mp3Section').classList.toggle('hidden', mode !== 'mp3');
+    hideMessages();
+  }
+
+  async function startDownload() {
+    const url = currentUrl;
+    if (!url) return;
+
+    const format = currentMode === 'mp3' ? 'mp3' : 'mp4';
+    const quality = selectedQuality;
+
+    setDownloadingState(true);
+    showProgress(0, 'Yuklab olish boshlanmoqda...');
+
+    try {
+      const res = await fetch('/api/download', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url, quality, format })
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+
+      currentDownloadId = data.download_id;
+      pollProgress(currentDownloadId, format === 'mp3');
+    } catch (e) {
+      setDownloadingState(false);
+      showError('Xato: ' + e.message);
+    }
+  }
+
+  function pollProgress(id, isMp3) {
+    clearInterval(pollInterval);
+    pollInterval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/progress/${id}`);
+        const data = await res.json();
+
+        if (data.status === 'downloading') {
+          showProgress(data.percent, `Yuklab olinmoqda... ${data.percent}%`, isMp3);
+        } else if (data.status === 'processing') {
+          showProgress(99, 'Ishlanmoqda...', isMp3);
+        } else if (data.status === 'done') {
+          clearInterval(pollInterval);
+          showProgress(100, 'Tayyor!', isMp3);
+          setTimeout(() => {
+            triggerFileDownload(id);
+            setDownloadingState(false);
+            showSuccess('Fayl muvaffaqiyatli yuklandi! <a onclick="triggerFileDownload(\'' + id + '\')">Qayta yuklab olish</a>');
+          }, 500);
+        } else if (data.status === 'error') {
+          clearInterval(pollInterval);
+          setDownloadingState(false);
+          showError('Xato: ' + (data.error || 'Nomalum xato'));
+        }
+      } catch { /* network hiccup, retry */ }
+    }, 800);
+  }
+
+  function triggerFileDownload(id) {
+    const a = document.createElement('a');
+    a.href = `/api/file/${id}`;
+    a.download = '';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+  function showProgress(pct, text, isMp3 = false) {
+    const wrap = document.getElementById('progressWrap');
+    const fill = document.getElementById('progressFill');
+    const label = document.getElementById('progressText');
+    wrap.classList.remove('hidden');
+    fill.style.width = pct + '%';
+    fill.className = 'progress-bar-fill' + (isMp3 ? ' mp3-fill' : '');
+    label.textContent = text;
+    document.getElementById('successMsg').classList.add('hidden');
+    document.getElementById('errorMsg').classList.add('hidden');
+  }
+
+  function showSuccess(html) {
+    const el = document.getElementById('successMsg');
+    el.innerHTML = html;
+    el.classList.remove('hidden');
+    document.getElementById('progressWrap').classList.add('hidden');
+  }
+
+  function showError(msg) {
+    const el = document.getElementById('errorMsg');
+    el.textContent = msg;
+    el.classList.remove('hidden');
+    document.getElementById('progressWrap').classList.add('hidden');
+  }
+
+  function hideMessages() {
+    document.getElementById('successMsg').classList.add('hidden');
+    document.getElementById('errorMsg').classList.add('hidden');
+  }
+
+  function setDownloadingState(loading) {
+    const btns = ['dlVideoBtn', 'dlMp3Btn', 'fetchBtn'];
+    btns.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.disabled = loading;
+    });
+    if (!loading) {
+      document.getElementById('dlVideoBtn').innerHTML = '&#8659; Video Yuklab Olish';
+      document.getElementById('dlMp3Btn').innerHTML = '&#8659; MP3 Yuklab Olish';
+    } else {
+      if (currentMode === 'video') {
+        document.getElementById('dlVideoBtn').innerHTML = '<span class="loading-spin"></span>Yuklanmoqda...';
+      } else {
+        document.getElementById('dlMp3Btn').innerHTML = '<span class="loading-spin"></span>Yuklanmoqda...';
+      }
+    }
+  }
+
+  function resetState() {
+    clearInterval(pollInterval);
+    document.getElementById('infoCard').classList.add('hidden');
+    document.getElementById('optionsCard').classList.add('hidden');
+    document.getElementById('progressWrap').classList.add('hidden');
+    hideMessages();
+    setDownloadingState(false);
+    currentMode = 'video';
+    setMode('video');
+  }
+
+  // Enter key support
+  document.getElementById('urlInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') fetchInfo();
+  });
+</script>
+</body>
+</html>
