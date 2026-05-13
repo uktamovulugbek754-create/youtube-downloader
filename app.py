@@ -20,10 +20,18 @@ download_progress = {}
 LOCAL_BROWSERS = [] if IS_CLOUD else ["edge", "chrome", "firefox"]
 
 # Try these configs in order to bypass YouTube bot detection
+_IOS_HEADERS = {
+    "User-Agent": "com.google.ios.youtube/19.29.1 (iPhone16,2; U; CPU iOS 17_5_1 like Mac OS X;)",
+}
+_ANDROID_HEADERS = {
+    "User-Agent": "com.google.android.youtube/19.29.1 (Linux; U; Android 14; en_US) gzip",
+}
+
 YDL_CONFIGS = [
-    {"extractor_args": {"youtube": {"player_client": ["ios"]}}},
-    {"extractor_args": {"youtube": {"player_client": ["tv_simply"]}}},
-    {"extractor_args": {"youtube": {"player_client": ["mweb"]}}},
+    {"extractor_args": {"youtube": {"player_client": ["ios"]}}, "http_headers": _IOS_HEADERS},
+    {"extractor_args": {"youtube": {"player_client": ["android"]}}, "http_headers": _ANDROID_HEADERS},
+    {"extractor_args": {"youtube": {"player_client": ["tv_embedded"]}}},
+    {"extractor_args": {"youtube": {"player_client": ["ios", "web"]}}},
     *[{"cookiesfrombrowser": (b, None, None, None)} for b in LOCAL_BROWSERS],
     {},
 ]
@@ -74,6 +82,8 @@ def get_info():
             "available_qualities": available,
         })
     except Exception as e:
+        import traceback
+        print(traceback.format_exc())
         return jsonify({"error": str(e)}), 400
 
 
