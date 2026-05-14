@@ -19,7 +19,6 @@ download_progress = {}
 
 LOCAL_BROWSERS = [] if IS_CLOUD else ["edge", "chrome", "firefox"]
 
-# Try these configs in order to bypass YouTube bot detection
 _IOS_HEADERS = {
     "User-Agent": "com.google.ios.youtube/19.29.1 (iPhone16,2; U; CPU iOS 17_5_1 like Mac OS X;)",
 }
@@ -27,28 +26,42 @@ _ANDROID_HEADERS = {
     "User-Agent": "com.google.android.youtube/19.29.1 (Linux; U; Android 14; en_US) gzip",
 }
 
-YDL_CONFIGS = [
+COOKIES_FILE = Path(__file__).parent / "cookies.txt"
+_COOKIE_OPT = {"cookiefile": str(COOKIES_FILE)} if COOKIES_FILE.exists() else {}
+
+# For info (format listing): tv_embedded first — no auth needed, returns full DASH list
+YDL_INFO_CONFIGS = [
+    *([_COOKIE_OPT] if _COOKIE_OPT else []),
+    {"extractor_args": {"youtube": {"player_client": ["tv_embedded"]}}},
     {"extractor_args": {"youtube": {"player_client": ["ios"]}}, "http_headers": _IOS_HEADERS},
     {"extractor_args": {"youtube": {"player_client": ["android"]}}, "http_headers": _ANDROID_HEADERS},
+    {},
+]
+
+# For download: cookies.txt first, then mobile clients
+YDL_DL_CONFIGS = [
+    *([_COOKIE_OPT] if _COOKIE_OPT else []),
     {"extractor_args": {"youtube": {"player_client": ["tv_embedded"]}}},
-    {"extractor_args": {"youtube": {"player_client": ["ios", "web"]}}},
-    *[{"cookiesfrombrowser": (b, None, None, None)} for b in LOCAL_BROWSERS],
+    {"extractor_args": {"youtube": {"player_client": ["ios"]}}, "http_headers": _IOS_HEADERS},
+    {"extractor_args": {"youtube": {"player_client": ["android"]}}, "http_headers": _ANDROID_HEADERS},
     {},
 ]
 
 Q_MAP = {
-    "2160": "bestvideo[height<=2160][ext=mp4]+bestaudio[ext=m4a]/best[height<=2160]",
-    "1080": "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080]",
-    "720":  "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720]",
-    "480":  "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480]",
-    "360":  "bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360]",
-    "240":  "bestvideo[height<=240][ext=mp4]+bestaudio[ext=m4a]/best[height<=240]",
+    "2160": "bestvideo[height<=2160]+bestaudio/bestvideo[height<=2160][ext=mp4]+bestaudio[ext=m4a]/best[height<=2160]",
+    "1080": "bestvideo[height<=1080]+bestaudio/bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/best[height<=1080]",
+    "720":  "bestvideo[height<=720]+bestaudio/bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720]",
+    "480":  "bestvideo[height<=480]+bestaudio/bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/best[height<=480]",
+    "360":  "bestvideo[height<=360]+bestaudio/bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/best[height<=360]",
+    "240":  "bestvideo[height<=240]+bestaudio/bestvideo[height<=240][ext=mp4]+bestaudio[ext=m4a]/best[height<=240]",
 }
 
 
-def run_ydl(url, extra_opts, download=False):
+def run_ydl(url, extra_opts, download=False, configs=None):
+    if configs is None:
+        configs = YDL_DL_CONFIGS
     last_err = None
-    for cfg in YDL_CONFIGS:
+    for cfg in configs:
         opts = {"quiet": True, "no_warnings": True, **cfg, **extra_opts}
         try:
             with yt_dlp.YoutubeDL(opts) as ydl:
@@ -69,9 +82,9 @@ def get_info():
     if not url:
         return jsonify({"error": "URL kiritilmadi"}), 400
     try:
-        info = run_ydl(url, {})
+        info = run_ydl(url, {}, configs=YDL_INFO_CONFIGS)
         heights = {f.get("height") for f in info.get("formats", [])
-                   if f.get("height") and f.get("vcodec") != "none"}
+                   if f.get("height") and f.get("vcodec") not in (None, "none")}
         available = sorted([h for h in [2160, 1080, 720, 480, 360, 240] if h in heights], reverse=True)
         return jsonify({
             "title": info.get("title", ""),
@@ -82,8 +95,6 @@ def get_info():
             "available_qualities": available,
         })
     except Exception as e:
-        import traceback
-        print(traceback.format_exc())
         return jsonify({"error": str(e)}), 400
 
 
@@ -116,7 +127,7 @@ def start_download():
                 }
             else:
                 dl_opts = {
-                    "format": Q_MAP.get(quality, "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best"),
+                    "format": Q_MAP.get(quality, "bestvideo+bestaudio/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best"),
                     "merge_output_format": "mp4",
                 }
             dl_opts["outtmpl"] = str(DOWNLOAD_DIR / "%(id)s_%(title).60s.%(ext)s")
